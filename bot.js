@@ -1,8 +1,8 @@
 #!/usr/bin/node
 
-var Amount    = require("../src/js/amount.js").Amount;
-var Currency  = require("../src/js/amount.js").Currency;
-var Remote    = require("../src/js/remote.js").Remote;
+var Amount    = require("ripple-lib").Amount;
+var Currency  = require("ripple-lib").Currency;
+var Remote    = require("ripple-lib").Remote;
 var irc	      = require("irc");
 
 var remote_config = {
