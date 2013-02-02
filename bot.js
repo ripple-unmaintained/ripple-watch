@@ -35,7 +35,6 @@ client
         });
     });
     
-
 var writeMarket = function (message) {
   if (message)
   {
@@ -126,9 +125,18 @@ var remote  =
           if (m.engine_result === 'tesSUCCESS')
           {
             m.meta.AffectedNodes.forEach(function (n) {
-                if ('ModifiedNode' in n && n.ModifiedNode.LedgerEntryType === 'Offer') {
-                  var pf  = n.ModifiedNode.PreviousFields;
-                  var ff  = n.ModifiedNode.FinalFields;
+                var type;
+                
+                if ('ModifiedNode' in n)
+                  type  = 'ModifiedNode';
+                else if ('DeletedNode' in n)
+                  type  = 'DeletedNode';
+
+                var base  = type ? n[type] : undefined;
+                
+                if (base && base.LedgerEntryType === 'Offer') {
+                  var pf  = base.PreviousFields;
+                  var ff  = base.FinalFields;
 
                   var taker_got   = Amount.from_json(pf.TakerGets).subtract(Amount.from_json(ff.TakerGets));
                   var taker_paid  = Amount.from_json(pf.TakerPays).subtract(Amount.from_json(ff.TakerPays));
