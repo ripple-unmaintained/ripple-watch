@@ -42,10 +42,10 @@ client
 var write = function (message) {
   if (message)
   {
-    console.log(output);
+    console.log(message);
 
     if (self.irc) {
-      client.say("#ripple-watch", output);
+      client.say("#ripple-watch", message);
     }
   }
 }
