@@ -10,6 +10,8 @@ var gateways      = require("./config").gateways;
 var irc_config    = require("./config").irc_config;
 var remote_config = require("./config").remote_config;
 
+extend(require("ripple-lib/src/js/config"), require("./config"));
+
 var self  = this;
 
 self.totalCoins = undefined;
@@ -57,6 +59,64 @@ var writeWatch = function (message) {
   }
 }
 
+var process_offers  = function (m) {
+  if (m.engine_result === 'tesSUCCESS')
+  {
+    m.meta.AffectedNodes.forEach(function (n) {
+        var type;
+        
+        if ('ModifiedNode' in n)
+          type  = 'ModifiedNode';
+        else if ('DeletedNode' in n)
+          type  = 'DeletedNode';
+
+        var base  = type ? n[type] : undefined;
+        
+        if (base && base.LedgerEntryType === 'Offer') {
+          var pf  = base.PreviousFields;
+          var ff  = base.FinalFields;
+
+          var taker_got   = Amount.from_json(pf.TakerGets).subtract(Amount.from_json(ff.TakerGets));
+          var taker_paid  = Amount.from_json(pf.TakerPays).subtract(Amount.from_json(ff.TakerPays));
+
+          if (taker_got.is_native())
+          {
+            [taker_got, taker_paid] = [taker_paid, taker_got];
+          }
+
+          if (taker_paid.is_native())
+          {
+            var gateway = gateways[taker_got.issuer().to_json({ no_gateway: true })];
+
+            if (gateway)
+            {
+              writeMarket(
+                  gateway
+                  + " " + taker_paid.to_human()
+                  + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
+                  + " " + taker_got.currency().to_human()
+                );
+            }
+            else
+            {
+              // Ignore non-reknown issuer.
+            }
+//                    writeMarket(
+//                      taker_paid.to_human_full({ gateways: gateways })
+//                      + " for "
+//                      + taker_got.to_human_full({ gateways: gateways })
+//                      );
+          }
+          else
+          {
+            // Ignore IOU for IOU.
+console.log("*: ignore");
+          }
+        }
+      });
+  }
+}
+
 var remote  =
   Remote
     .from_config(remote_config)
@@ -90,29 +150,28 @@ var remote  =
 
         if (m.transaction.TransactionType === 'Payment')
         {
-          var amount    = Amount.from_json(m.transaction.Amount);
-          var currency  = amount.currency();
+          // XXX Show tags?
+          // XXX Break payments down by parts.
 
-          say_watch = amount.to_human_full({ gateways: gateways })
+          say_watch = Amount.from_json(m.transaction.Amount).to_human_full({ gateways: gateways })
                   + " "
-                  + m.transaction.Account + " > " + m.transaction.Destination;
+                  + UInt160.from_json(m.transaction.Account).to_json({ gateways: gateways })
+                    + " > "
+                    + UInt160.from_json(m.transaction.Destination).to_json({ gateways: gateways });
+
+          process_offers(m);
         }
         else if (m.transaction.TransactionType === 'AccountSet')
         {
           console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
-          say_watch = m.transaction.Account;
+          say_watch = UInt160.from_json(m.transaction.Account).to_human_full({ gateways: gateways });
         }
         else if (m.transaction.TransactionType === 'TrustSet')
         {
-          var amount    = Amount.from_json(m.transaction.LimitAmount);
-          var currency  = amount.currency();
-
-          say_watch = amount.to_human()
-                  + "/"
-                  + currency.to_human()
-                  + " "
-                  + m.transaction.Account + " > " + m.transaction.LimitAmount.issuer;
+          say_watch = Amount.from_json(m.transaction.LimitAmount).to_human_full({ gateways: gateways })
+                        + " "
+                        + UInt160.from_json(m.transaction.Account).to_json({ gateways: gateways });
         }
         else if (m.transaction.TransactionType === 'OfferCreate')
         {
@@ -122,61 +181,7 @@ var remote  =
                 + " offers " + Amount.from_json(m.transaction.TakerGets).to_human_full({ gateways: gateways })
                 + " for " + Amount.from_json(m.transaction.TakerPays).to_human_full({ gateways: gateways });
 
-          if (m.engine_result === 'tesSUCCESS')
-          {
-            m.meta.AffectedNodes.forEach(function (n) {
-                var type;
-                
-                if ('ModifiedNode' in n)
-                  type  = 'ModifiedNode';
-                else if ('DeletedNode' in n)
-                  type  = 'DeletedNode';
-
-                var base  = type ? n[type] : undefined;
-                
-                if (base && base.LedgerEntryType === 'Offer') {
-                  var pf  = base.PreviousFields;
-                  var ff  = base.FinalFields;
-
-                  var taker_got   = Amount.from_json(pf.TakerGets).subtract(Amount.from_json(ff.TakerGets));
-                  var taker_paid  = Amount.from_json(pf.TakerPays).subtract(Amount.from_json(ff.TakerPays));
-
-                  if (taker_got.is_native())
-                  {
-                    [taker_got, taker_paid] = [taker_paid, taker_got];
-                  }
-
-                  if (taker_paid.is_native())
-                  {
-                    var gateway = gateways[taker_got.issuer().to_json()];
-
-                    if (gateway)
-                    {
-                      writeMarket(
-                          gateway
-                          + " " + taker_paid.to_human()
-                          + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
-                          + " " + taker_got.currency().to_human()
-                        );
-                    }
-                    else
-                    {
-                      // Ignore non-reknown issuer.
-                    }
-//                    writeMarket(
-//                      taker_paid.to_human_full({ gateways: gateways })
-//                      + " for "
-//                      + taker_got.to_human_full({ gateways: gateways })
-//                      );
-                  }
-                  else
-                  {
-                    // Ignore IOU for IOU.
-console.log("*: ignore");
-                  }
-                }
-              });
-          }
+          process_offers(m);
         }
         else if (m.transaction.TransactionType === 'OfferCancel')
         {
