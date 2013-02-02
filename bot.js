@@ -1,27 +1,21 @@
 #!/usr/bin/node
 
-var Amount    = require("ripple-lib").Amount;
-var Currency  = require("ripple-lib").Currency;
-var Remote    = require("ripple-lib").Remote;
-var irc	      = require("irc");
+var Amount        = require("ripple-lib").Amount;
+var Currency      = require("ripple-lib").Currency;
+var Remote        = require("ripple-lib").Remote;
+var irc	          = require("irc");
+var irc_config    = require("./config").irc_config;
+var remote_config = require("./config").remote_config;
 
 var self  = this;
 
 self.totalCoins = undefined;
 
-var remote_config = {
-  'trusted' : true,
-  'websocket_ip' : "127.0.0.1",
-  'websocket_port' : 7005,
-  'websocket_ssl' : false,
-  'local_sequence' : true,
-  'local_fee' : true,
-};
-
 var client = new irc.Client('irc.freenode.net', 'ripplebot', {
     userName: "ripplebot",
     realName: "Ripple IRC Bot",
     channels: ['#ripple-market', '#ripple-watch'],
+    autoConnect: irc_config.enable,
 });
 
 client
@@ -39,7 +33,18 @@ client
     });
     
 
-var write = function (message) {
+var writeMarket = function (message) {
+  if (message)
+  {
+    console.log(message);
+
+    if (self.irc) {
+      client.say("#ripple-market", message);
+    }
+  }
+}
+
+var writeWatch = function (message) {
   if (message)
   {
     console.log(message);
@@ -52,7 +57,7 @@ var write = function (message) {
 
 var remote  =
   Remote
-    .from_config(remote_config, true)
+    .from_config(remote_config)
     .once('ledger_closed', function (m) {
         self.rippled  = true;
 
@@ -62,7 +67,7 @@ var remote  =
         console.log("*** rippled error: ", JSON.stringify(m));
       })
     .on('ledger_closed', function (m) {
-        console.log("ledger: ", JSON.stringify(m));
+        // console.log("ledger: ", JSON.stringify(m));
 
         remote.request_ledger_header()
           .ledger_index(m.ledger_index)
@@ -79,14 +84,12 @@ var remote  =
 
                 // console.log("ledger_header: ", JSON.stringify(lh));
 
-                write("Ledger #" + m.ledger_index + " Total XRP: " + xrp_whole + "." + xrp_fraction);
+                writeWatch("Ledger #" + m.ledger_index + " Total XRP: " + xrp_whole + "." + xrp_fraction);
               }
             })
           .request()
       })
     .on('transaction', function (m) {
-        console.log("transaction: ", JSON.stringify(m, undefined, 2));
-
         var say;
 
         if (m.transaction.TransactionType === 'Payment')
@@ -102,6 +105,8 @@ var remote  =
         }
         else if (m.transaction.TransactionType === 'AccountSet')
         {
+          console.log("transaction: ", JSON.stringify(m, undefined, 2));
+
           say = m.transaction.Account;
         }
         else if (m.transaction.TransactionType === 'TrustSet')
@@ -117,6 +122,7 @@ var remote  =
         }
         else if (m.transaction.TransactionType === 'OfferCreate')
         {
+          console.log("transaction: ", JSON.stringify(m, undefined, 2));
 //     "TakerGets": {
 //       "currency": "AUD",
 //       "issuer": "rBcYpuDT1aXNo4jnqczWJTytKGdBGufsre",
@@ -128,6 +134,8 @@ var remote  =
         }
         else if (m.transaction.TransactionType === 'OfferCancel')
         {
+          console.log("transaction: ", JSON.stringify(m, undefined, 2));
+
           say = m.transaction.Account;
         }
 
@@ -140,7 +148,7 @@ var remote  =
               + m.transaction.TransactionType + " "
               + say;
 
-          write(output);
+          writeWatch(output);
         }
       })
   .connect();
