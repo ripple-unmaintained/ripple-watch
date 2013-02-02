@@ -5,6 +5,10 @@ var Currency  = require("ripple-lib").Currency;
 var Remote    = require("ripple-lib").Remote;
 var irc	      = require("irc");
 
+var self  = this;
+
+self.totalCoins = undefined;
+
 var remote_config = {
   'trusted' : true,
   'websocket_ip' : "127.0.0.1",
@@ -20,23 +24,31 @@ var client = new irc.Client('irc.freenode.net', 'ripplebot', {
     channels: ['#ripple-market', '#ripple-watch'],
 });
 
-client.on('registered', function(message) {
-    console.log("registered: ", message);
+client
+  .on('error', function(message) {
+      console.log("*** irc error: ", message);
+    })
+  .on('registered', function(message) {
+      console.log("registered: ", message);
 
-    client.join("#ripple-watch", function() {
-        self.irc  = true;
+      client.join("#ripple-watch", function() {
+          self.irc  = true;
 
-        console.log("*** Connected to : irc");
-      });
-  });
+          console.log("*** Connected to irc");
+        });
+    });
     
-client.on('error', function(message) {
-    console.log("error: ", message);
-});
 
-var self  = this;
+var write = function (message) {
+  if (message)
+  {
+    console.log(output);
 
-    self.totalCoins = undefined;
+    if (self.irc) {
+      client.say("#ripple-watch", output);
+    }
+  }
+}
 
 var remote  =
   Remote
@@ -44,10 +56,10 @@ var remote  =
     .once('ledger_closed', function (m) {
         self.rippled  = true;
 
-        console.log("*** Connected to : rippled");
+        console.log("*** Connected to rippled");
       })
     .on('error', function (m) {
-        console.log("*** rippled: error: ", JSON.stringify(m));
+        console.log("*** rippled error: ", JSON.stringify(m));
       })
     .on('ledger_closed', function (m) {
         console.log("ledger: ", JSON.stringify(m));
@@ -67,9 +79,7 @@ var remote  =
 
                 // console.log("ledger_header: ", JSON.stringify(lh));
 
-                client.say("#ripple-watch",
-                  "Ledger #" + m.ledger_index
-                  + " Total XRP: " + xrp_whole + "." + xrp_fraction);
+                write("Ledger #" + m.ledger_index + " Total XRP: " + xrp_whole + "." + xrp_fraction);
               }
             })
           .request()
@@ -79,14 +89,7 @@ var remote  =
 
         var say;
 
-        var prefix  = m.engine_result === 'tesSUCCESS'
-          ? ""
-          : m.engine_result + ": ";
-
-        if (!self.irc) {
-          // nothing();
-        }
-        else if (m.transaction.TransactionType === 'Payment')
+        if (m.transaction.TransactionType === 'Payment')
         {
           var amount    = Amount.from_json(m.transaction.Amount);
           var currency  = amount.currency();
@@ -130,12 +133,14 @@ var remote  =
 
         if (say)
         {
-          client.say("#ripple-watch",
+          var output  =
               (m.engine_result === 'tesSUCCESS'
                 ? ""
                 : m.engine_result + ": ")
               + m.transaction.TransactionType + " "
-              + say);
+              + say;
+
+          write(output);
         }
       })
   .connect();
