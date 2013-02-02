@@ -1,0 +1,10 @@
+# .gitignore
+
+# Ignore vim swap files.
+*.swp
+
+# Ignore locally installed node_modules
+node_modules
+
+# Ignore customized configs
+config.js
