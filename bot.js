@@ -177,7 +177,7 @@ var remote  =
 
                 // console.log("ledger_header: ", JSON.stringify(lh));
 
-                writeWatch("Ledger " + m.ledger_index + " Total: " + Amount.from_json(self.totalCoins).to_human()) + "/XRP";
+                actionWatch("on ledger " + m.ledger_index + ". Total: " + Amount.from_json(self.totalCoins).to_human() + "/XRP");
               }
             })
           .request()
@@ -214,7 +214,7 @@ var remote  =
         {
           console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
-          say_watch = UInt160.from_json(m.transaction.Account).to_human_full();
+          say_watch = UInt160.from_json(m.transaction.Account).to_json()
                 + " offers " + Amount.from_json(m.transaction.TakerGets).to_human_full()
                 + " for " + Amount.from_json(m.transaction.TakerPays).to_human_full();
 
