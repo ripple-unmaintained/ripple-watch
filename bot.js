@@ -37,6 +37,33 @@ client
         });
     });
     
+var actionMarket = function (message) {
+  if (message)
+  {
+    console.log("m: " + message);
+
+    if (self.irc) {
+      client.action("#ripple-market", message);
+    }
+  }
+}
+
+var actionWatch = function (message) {
+  if (message)
+  {
+    console.log("w: " + message);
+
+    if (self.irc) {
+      client.action("#ripple-watch", message);
+    }
+  }
+}
+
+var actionAll = function (message) {
+  actionMarket(message);
+  actionWatch(message);
+}
+
 var writeMarket = function (message) {
   if (message)
   {
@@ -99,18 +126,18 @@ var process_offers  = function (m) {
             }
             else
             {
-              // Ignore non-reknown issuer.
+              // Ignore unrenowned issuer.
             }
-//                    writeMarket(
-//                      taker_paid.to_human_full({ gateways: gateways })
-//                      + " for "
-//                      + taker_got.to_human_full({ gateways: gateways })
-//                      );
           }
           else
           {
             // Ignore IOU for IOU.
 console.log("*: ignore");
+//          writeMarket(
+//            taker_paid.to_human_full()
+//            + " for "
+//            + taker_got.to_human_full()
+//            );
           }
         }
       });
@@ -128,6 +155,16 @@ var remote  =
     .on('error', function (m) {
         console.log("*** rippled error: ", JSON.stringify(m));
       })
+    .on('state', function (s) {
+        if ('online' === s)
+        {
+          actionAll("is connected to ripple network. :)");  
+        }
+        else if ('offline' === s)
+        {
+          actionAll("is disconnected from ripple network. :(");  
+        }
+      })
     .on('ledger_closed', function (m) {
         // console.log("ledger: ", JSON.stringify(m));
 
@@ -140,7 +177,7 @@ var remote  =
 
                 // console.log("ledger_header: ", JSON.stringify(lh));
 
-                writeWatch("Ledger #" + m.ledger_index + " Total XRP: " + Amount.from_json(self.totalCoins).to_human());
+                writeWatch("Ledger " + m.ledger_index + " Total: " + Amount.from_json(self.totalCoins).to_human()) + "/XRP";
               }
             })
           .request()
@@ -153,11 +190,11 @@ var remote  =
           // XXX Show tags?
           // XXX Break payments down by parts.
 
-          say_watch = Amount.from_json(m.transaction.Amount).to_human_full({ gateways: gateways })
+          say_watch = Amount.from_json(m.transaction.Amount).to_human_full()
                   + " "
-                  + UInt160.from_json(m.transaction.Account).to_json({ gateways: gateways })
+                  + UInt160.from_json(m.transaction.Account).to_json()
                     + " > "
-                    + UInt160.from_json(m.transaction.Destination).to_json({ gateways: gateways });
+                    + UInt160.from_json(m.transaction.Destination).to_json();
 
           process_offers(m);
         }
@@ -165,21 +202,21 @@ var remote  =
         {
           console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
-          say_watch = UInt160.from_json(m.transaction.Account).to_human_full({ gateways: gateways });
+          say_watch = UInt160.from_json(m.transaction.Account).to_human_full();
         }
         else if (m.transaction.TransactionType === 'TrustSet')
         {
-          say_watch = Amount.from_json(m.transaction.LimitAmount).to_human_full({ gateways: gateways })
+          say_watch = Amount.from_json(m.transaction.LimitAmount).to_human_full()
                         + " "
-                        + UInt160.from_json(m.transaction.Account).to_json({ gateways: gateways });
+                        + UInt160.from_json(m.transaction.Account).to_json();
         }
         else if (m.transaction.TransactionType === 'OfferCreate')
         {
           console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
-          say_watch = m.transaction.Account
-                + " offers " + Amount.from_json(m.transaction.TakerGets).to_human_full({ gateways: gateways })
-                + " for " + Amount.from_json(m.transaction.TakerPays).to_human_full({ gateways: gateways });
+          say_watch = UInt160.from_json(m.transaction.Account).to_human_full();
+                + " offers " + Amount.from_json(m.transaction.TakerGets).to_human_full()
+                + " for " + Amount.from_json(m.transaction.TakerPays).to_human_full();
 
           process_offers(m);
         }
