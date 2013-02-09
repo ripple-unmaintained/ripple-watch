@@ -192,9 +192,9 @@ var remote  =
 
           say_watch = Amount.from_json(m.transaction.Amount).to_human_full()
                   + " "
-                  + UInt160.from_json(m.transaction.Account).to_json()
+                  + UInt160.json_rewrite(m.transaction.Account)
                     + " > "
-                    + UInt160.from_json(m.transaction.Destination).to_json();
+                    + UInt160.json_rewrite(m.transaction.Destination);
 
           process_offers(m);
         }
@@ -202,19 +202,20 @@ var remote  =
         {
           console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
-          say_watch = UInt160.from_json(m.transaction.Account).to_human_full();
+          say_watch = UInt160.json_rewrite(m.transaction.Account);
         }
         else if (m.transaction.TransactionType === 'TrustSet')
         {
           say_watch = Amount.from_json(m.transaction.LimitAmount).to_human_full()
                         + " "
-                        + UInt160.from_json(m.transaction.Account).to_json();
+                        + UInt160.json_rewrite(m.transaction.Account);
         }
         else if (m.transaction.TransactionType === 'OfferCreate')
         {
-          console.log("transaction: ", JSON.stringify(m, undefined, 2));
+          // console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
-          say_watch = UInt160.from_json(m.transaction.Account).to_json()
+          say_watch = UInt160.json_rewrite(m.transaction.Account)
+                + " #" + m.transaction.Sequence
                 + " offers " + Amount.from_json(m.transaction.TakerGets).to_human_full()
                 + " for " + Amount.from_json(m.transaction.TakerPays).to_human_full();
 
@@ -222,9 +223,10 @@ var remote  =
         }
         else if (m.transaction.TransactionType === 'OfferCancel')
         {
-          console.log("transaction: ", JSON.stringify(m, undefined, 2));
+          // console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
-          say_watch = m.transaction.Account;
+          say_watch = UInt160.json_rewrite(m.transaction.Account)
+                + " #" + m.transaction.OfferSequence;
         }
 
         if (say_watch)
