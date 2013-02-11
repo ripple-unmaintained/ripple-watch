@@ -14,7 +14,8 @@ extend(require("ripple-lib/src/js/config"), require("./config"));
 
 var self  = this;
 
-self.totalCoins = undefined;
+self.totalCoins   = undefined;
+self.load_factor  = undefined;
 
 var client = new irc.Client('irc.freenode.net', 'ripplebot', {
     userName: "ripplebot",
@@ -163,6 +164,18 @@ var remote  =
         else if ('offline' === s)
         {
           actionAll("is disconnected from ripple network. :(");  
+        }
+      })
+    .on('load', function (m) {
+        if (!self.load_factor)
+        {
+          self.load_factor  = m.load_factor;
+        }
+        else if (self.load_factor !== m.load_factor)
+        {
+          self.load_factor  = m.load_factor;
+
+          actionWatch("load factor: " + self.load_factor);
         }
       })
     .on('ledger_closed', function (m) {
