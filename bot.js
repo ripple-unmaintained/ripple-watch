@@ -104,41 +104,52 @@ var process_offers  = function (m) {
           var pf  = base.PreviousFields;
           var ff  = base.FinalFields;
 
-          var taker_got   = Amount.from_json(pf.TakerGets).subtract(Amount.from_json(ff.TakerGets));
-          var taker_paid  = Amount.from_json(pf.TakerPays).subtract(Amount.from_json(ff.TakerPays));
-
-          if (taker_got.is_native())
+          if (!pf)
           {
-            [taker_got, taker_paid] = [taker_paid, taker_got];
-          }
-
-          if (taker_paid.is_native())
-          {
-            var gateway = gateways[taker_got.issuer().to_json({ no_gateway: true })];
-
-            if (gateway)
-            {
-              writeMarket(
-                  gateway
-                  + " " + taker_paid.to_human()
-                  + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
-                  + " " + taker_got.currency().to_human()
-                );
-            }
-            else
-            {
-              // Ignore unrenowned issuer.
-            }
+            console.log("process_offers: NO pf! %s", JSON.stringify(m, undefined, 2));
           }
           else
           {
-            // Ignore IOU for IOU.
+            var taker_got   = Amount.from_json(pf.TakerGets).subtract(Amount.from_json(ff.TakerGets));
+            var taker_paid  = Amount.from_json(pf.TakerPays).subtract(Amount.from_json(ff.TakerPays));
+
+            if (taker_got.is_native())
+            {
+              var tg  = taker_got;
+              var tp  = taker_paid;
+
+              taker_got   = tp;
+              taker_paid  = tg;
+            }
+
+            if (taker_paid.is_native())
+            {
+              var gateway = gateways[taker_got.issuer().to_json({ no_gateway: true })];
+
+              if (gateway)
+              {
+                writeMarket(
+                    gateway
+                    + " " + taker_paid.to_human()
+                    + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
+                    + " " + taker_got.currency().to_human()
+                  );
+              }
+              else
+              {
+                // Ignore unrenowned issuer.
+              }
+            }
+            else
+            {
+              // Ignore IOU for IOU.
 console.log("*: ignore");
 //          writeMarket(
 //            taker_paid.to_human_full()
 //            + " for "
 //            + taker_got.to_human_full()
 //            );
+            }
           }
         }
       });
