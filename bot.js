@@ -20,7 +20,7 @@ self.load_factor  = undefined;
 var client = new irc.Client('irc.freenode.net', 'ripplebot', {
     userName: "ripplebot",
     realName: "Ripple IRC Bot",
-    channels: ['#ripple-market', '#ripple-watch'],
+//    channels: ['#ripple-market', '#ripple-watch'],
     autoConnect: irc_config.enable,
 });
 
@@ -31,11 +31,19 @@ client
   .on('registered', function(message) {
       console.log("registered: ", message);
 
-      client.join("#ripple-watch", function() {
-          self.irc  = true;
+      if (irc_config.enable)
+      {
+        client.join("#ripple-watch", function() {
+            self.irc_watch  = true;
 
-          console.log("*** Connected to irc");
-        });
+            console.log("*** Connected to #ripple-watch");
+          });
+        client.join("#ripple-market", function() {
+            self.irc_market  = true;
+
+            console.log("*** Connected to #ripple-market");
+          });
+      }
     });
     
 var actionMarket = function (message) {
@@ -43,7 +51,7 @@ var actionMarket = function (message) {
   {
     console.log("m: " + message);
 
-    if (self.irc) {
+    if (self.irc_market) {
       client.action("#ripple-market", message);
     }
   }
@@ -54,7 +62,8 @@ var actionWatch = function (message) {
   {
     console.log("w: " + message);
 
-    if (self.irc) {
+    if (self.irc_watch)
+    {
       client.action("#ripple-watch", message);
     }
   }
@@ -70,7 +79,7 @@ var writeMarket = function (message) {
   {
     console.log("M: " + message);
 
-    if (self.irc) {
+    if (self.irc_market) {
       client.say("#ripple-market", message);
     }
   }
@@ -81,7 +90,7 @@ var writeWatch = function (message) {
   {
     console.log("W: " + message);
 
-    if (self.irc) {
+    if (self.irc_watch) {
       client.say("#ripple-watch", message);
     }
   }
@@ -133,6 +142,7 @@ var process_offers  = function (m) {
                     + " " + taker_paid.to_human()
                     + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
                     + " " + taker_got.currency().to_human()
+                    + " Trade"
                   );
               }
               else
@@ -201,7 +211,7 @@ var remote  =
 
                 // console.log("ledger_header: ", JSON.stringify(lh));
 
-                actionWatch("on ledger " + m.ledger_index + ". Total: " + Amount.from_json(self.totalCoins).to_human() + "/XRP");
+                actionWatch("on ledger #" + m.ledger_index + ". Total: " + Amount.from_json(self.totalCoins).to_human() + "/XRP");
               }
             })
           .request()
@@ -238,16 +248,52 @@ var remote  =
         {
           // console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
+          var owner        = UInt160.json_rewrite(m.transaction.Account);
+          var taker_gets  = Amount.from_json(m.transaction.TakerGets);
+          var taker_pays  = Amount.from_json(m.transaction.TakerPays);
+
           say_watch = UInt160.json_rewrite(m.transaction.Account)
                 + " #" + m.transaction.Sequence
-                + " offers " + Amount.from_json(m.transaction.TakerGets).to_human_full()
-                + " for " + Amount.from_json(m.transaction.TakerPays).to_human_full();
+                + " offers " + taker_gets.to_human_full()
+                + " for " + taker_pays.to_human_full();
 
+          if (taker_gets.is_native() || taker_pays.is_native())
+          {
+            var what    = taker_gets.is_native()
+                            ? 'Bid'
+                            : 'Ask';
+            var xrp     = taker_gets.is_native()
+                            ? taker_gets
+                            : taker_pays;
+            var amount  = taker_gets.is_native()
+                            ? taker_pays
+                            : taker_gets;
+
+            var gateway = gateways[amount.issuer().to_json({ no_gateway: true })];
+
+            if (gateway)
+            {
+              writeMarket(
+                  gateway
+                    + " " + xrp.to_human()
+                    + " @ " + amount.ratio_human(xrp).to_human()
+                    + " " + amount.currency().to_human()
+                    + " " + what
+                    + " " + owner + " #" + m.transaction.Sequence
+                );
+            }
+          }
+
+//  weex   2000 @ 0.10 BTC Bid WHO #4
+//  weex   2000 @ 0.10 BTC Ask WHO #4
+//  weex 9,749.99998 @ 0.00003663003663003658 BTC Trade
           process_offers(m);
         }
         else if (m.transaction.TransactionType === 'OfferCancel')
         {
           // console.log("transaction: ", JSON.stringify(m, undefined, 2));
+// TODO:
+//  weex   2000 @ 0.10 BTC Bid WHP #4 Cancel
 
           say_watch = UInt160.json_rewrite(m.transaction.Account)
                 + " #" + m.transaction.OfferSequence;
