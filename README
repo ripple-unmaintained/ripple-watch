@@ -1,0 +1,6 @@
+Set up instructions:
+ npm install ripple-lib extend node-irc
+ cp config-example.js config.js
+
+Customize config.js
+
