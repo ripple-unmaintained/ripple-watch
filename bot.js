@@ -260,8 +260,8 @@ var remote  =
           if (taker_gets.is_native() || taker_pays.is_native())
           {
             var what    = taker_gets.is_native()
-                            ? 'Bid'
-                            : 'Ask';
+                            ? 'Ask'
+                            : 'Bid';
             var xrp     = taker_gets.is_native()
                             ? taker_gets
                             : taker_pays;
