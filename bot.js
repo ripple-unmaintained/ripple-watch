@@ -8,6 +8,7 @@ var async	  = require("async");
 var extend	  = require("extend");
 var irc	          = require("irc");
 var gateways      = require("./config").gateways;
+var hotwallets    = require("./config").hotwallets;
 var irc_config    = require("./config").irc_config;
 var remote_config = require("./config").remote_config;
 
@@ -64,8 +65,8 @@ var account_update = function (callback, ledger_hash, address) {
           // console.log("lines: %s", address);
           // console.log("lines: %s >>> %s", address, JSON.stringify(m, undefined, 2));
 
-          var _summary = {};
-          var _gateway  = gateways[address];
+          var _summary    = {};
+          var _gateway    = gateways[address];
 
           if (!(_gateway in _summary))
             _summary[_gateway]  = {};
@@ -83,7 +84,7 @@ var account_update = function (callback, ledger_hash, address) {
                               .set_issuer(UInt160.ADDRESS_ONE)
                               .parse_value(line.balance);
 
-            if (!_value.is_zero())
+            if (!_value.is_zero() && !(line.account in hotwallets))
             {
               _summary_gateway[line.currency] = line.currency in _summary_gateway
                 ? _summary_gateway[line.currency].add(_value)
@@ -99,6 +100,110 @@ var account_update = function (callback, ledger_hash, address) {
       .request();
 };
 
+var update_results = function (results) {
+  // Merge results.
+  var _merged             = {};
+  var _merged_currencies  = {};
+
+  for (var i = results.length; i--;)
+  {
+    var _summary    = results[i];
+    // console.log("i: %s _summary: %s", i, JSON.stringify(_summary, undefined, 2));
+    var _gateways   = Object.keys(_summary);
+
+    for (var j = _gateways.length; j--;)
+    {
+      var _gateway    = _gateways[j];
+      var _currencies = Object.keys(_summary[_gateway]);
+
+      for (var k = _currencies.length; k--;)
+      {
+        var _currency = _currencies[k];
+        var _balance  = _summary[_gateway][_currency];
+
+        if (_balance.is_negative())
+        {
+          if (!(_gateway in _merged))
+            _merged[_gateway]  = {};
+
+          _merged[_gateway][_currency] = _currency in _merged[_gateway]
+            ? _merged[_gateway]._currency.add(_balance)
+            : _balance;
+
+          _merged_currencies[_currency] = true;
+        }
+      }
+    }
+  }
+
+  // console.log("merged: ", JSON.stringify(_merged, undefined, 2));
+  // console.log("merged_currencies: ", JSON.stringify(_merged_currencies, undefined, 2));
+
+  var _gateways   = Object.keys(_merged).sort().reverse();
+  var _currencies = Object.keys(_merged_currencies).sort().reverse();
+
+  for (var i = _currencies.length; i--;)
+  {
+    var _currency = _currencies[i];
+    // XXX Is there any easier way to set something to zero?
+    var _total    = (new Amount())
+                      .parse_value('0')
+                      .set_currency(_currency)
+                      .set_issuer(UInt160.ADDRESS_ONE);
+
+    var _each       = [];
+    var _each_irc   = [];
+    var _changed    = false;
+
+    for (var j = _gateways.length; j--;)
+    {
+      var _gateway = _gateways[j];
+
+      if (_merged[_gateway][_currency])
+      {
+        var _balance      = _merged[_gateway][_currency].negate();
+        var _balance_diff = !capital[_currency] || !capital[_currency][_gateway]
+                              ? 1
+                              : _balance.compareTo(capital[_currency][_gateway]);
+
+
+        if (_balance_diff)
+          _changed  = true;
+
+        _each.push(_gateway + "=" + colorize('console', _balance.to_human(), _balance_diff));
+        _each_irc.push(_gateway + "=" + colorize('irc', _balance.to_human(), _balance_diff));
+
+        if (!capital[_currency])
+          capital[_currency]  = {};
+
+        capital[_currency][_gateway] = _balance;
+
+        _total  = _total.add(_balance);
+      }
+    }
+
+    var _total_diff   = !capital[_currency] || !capital[_currency]._total ? 1 : _total.compareTo(capital[_currency]._total);
+
+    if (_total_diff)
+    {
+      _changed  = true;
+    }
+
+    if (!capital[_currency])
+      capital[_currency]  = {};
+     
+    capital[_currency]._total = _total;
+
+    if (_changed)
+    {
+      var _output     = _currency + "=" + colorize('console', _total.to_human(), _total_diff) + ": " +_each.join(" ");
+      var _output_irc  = _currency + "=" + colorize('irc', _total.to_human(), _total_diff) + ": " +_each_irc.join(" ");
+
+      writeMarket(_output_irc, _output);
+    }
+  }
+}
+
 var capital_update = function (ledger_hash) {
   // On ledger_closed we get the account lines of gateways and find their capitalization.
 
@@ -113,105 +218,9 @@ var capital_update = function (ledger_hash) {
       function (err, results) {
         // console.log("results: ", JSON.stringify(results, undefined, 2));
 
-        // Merge results.
-        var _merged             = {};
-        var _merged_currencies  = {};
-
-        for (var i = results.length; i--;)
+        if (!err)
         {
-          var _summary    = results[i];
-          var _gateways   = Object.keys(_summary);
-
-          for (var j = _gateways.length; j--;)
-          {
-            var _gateway    = _gateways[j];
-            var _currencies = Object.keys(_summary[_gateway]);
-
-            for (var k = _currencies.length; k--;)
-            {
-              var _currency = _currencies[k];
-              var _balance  = _summary[_gateway][_currency];
-
-              if (_balance.is_negative())
-              {
-                if (!(_gateway in _merged))
-                  _merged[_gateway]  = {};
-
-                _merged[_gateway][_currency] = _currency in _merged[_gateway]
-                  ? _merged[_gateway]._currency.add(_balance)
-                  : _balance;
-
-                _merged_currencies[_currency] = true;
-              }
-            }
-          }
-        }
-
-        // console.log("merged: ", JSON.stringify(_merged, undefined, 2));
-        // console.log("merged_currencies: ", JSON.stringify(_merged_currencies, undefined, 2));
-
-        var _gateways   = Object.keys(_merged).sort().reverse();
-        var _currencies = Object.keys(_merged_currencies).sort().reverse();
-
-        for (var i = _currencies.length; i--;)
-        {
-          var _currency = _currencies[i];
-          // XXX Is there any easier way to set something to zero?
-          var _total    = (new Amount())
-                            .parse_value('0')
-                            .set_currency(_currency)
-                            .set_issuer(UInt160.ADDRESS_ONE);
-
-          var _each       = [];
-          var _each_irc   = [];
-          var _changed    = false;
-
-          for (var j = _gateways.length; j--;)
-          {
-            var _gateway = _gateways[j];
-
-            if (_merged[_gateway][_currency])
-            {
-              var _balance      = _merged[_gateway][_currency].negate();
-              var _balance_diff = !capital[_currency] || !capital[_currency][_gateway]
-                                    ? 1
-                                    : _balance.compareTo(capital[_currency][_gateway]);
-
-
-              if (_balance_diff)
-                _changed  = true;
-
-              _each.push(_gateway + "=" + colorize('console', _balance.to_human(), _balance_diff));
-              _each_irc.push(_gateway + "=" + colorize('irc', _balance.to_human(), _balance_diff));
-
-              if (!capital[_currency])
-                capital[_currency]  = {};
-
-              capital[_currency][_gateway] = _balance;
-
-              _total  = _total.add(_balance);
-            }
-          }
-
-          var _total_diff   = !capital[_currency] || !capital[_currency]._total ? 1 : _total.compareTo(capital[_currency]._total);
-
-          if (_total_diff)
-          {
-            _changed  = true;
-          }
-
-          if (!capital[_currency])
-            capital[_currency]  = {};
-           
-          capital[_currency]._total = _total;
-
-          if (_changed)
-          {
-            var _output     = _currency + "=" + colorize('console', _total.to_human(), _total_diff) + ": " +_each.join(" ");
-            var _output_irc  = _currency + "=" + colorize('irc', _total.to_human(), _total_diff) + ": " +_each_irc.join(" ");
-
-            writeMarket(_output_irc, _output);
-          }
+          update_results(results);
         }
       }
     );
@@ -357,11 +366,11 @@ remote  =
     .on('state', function (s) {
         if ('online' === s)
         {
-          actionAll("is connected to ripple network. :)");  
+          actionAll("is connected to the Ripple network. :)");  
         }
         else if ('offline' === s)
         {
-          actionAll("is disconnected from ripple network. :(");  
+          actionAll("is disconnected from the Ripple network. :(");  
         }
       })
     .on('load', function (m) {
