@@ -20,8 +20,9 @@ self.totalCoins   = undefined;
 self.load_factor  = undefined;
 
 var remote;
+var gateway_addresses = extend(extend({}, gateways), hotwallets);
 var opts_gateways = {
-  'gateways' : gateways
+  'gateways' : gateway_addresses
 };
 
 var color_diff  = {
@@ -506,6 +507,7 @@ var client = new irc.Client('irc.freenode.net', 'ripplebot', {
 //    channels: ['#ripple-market', '#ripple-watch'],
     autoConnect: irc_config.enable,
     stripColors: false,
+    floodProtection: true,
 });
 
 client
