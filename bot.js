@@ -407,6 +407,7 @@ remote  =
       })
     .on('transaction', function (m) {
         var say_watch;
+        var say_type  = m.transaction.TransactionType;
 
         if (m.transaction.TransactionType === 'Payment')
         {
@@ -425,10 +426,12 @@ remote  =
         {
           console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
+          say_type  = 'Account';
           say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways);
         }
         else if (m.transaction.TransactionType === 'TrustSet')
         {
+          say_type  = 'Trust';
           say_watch = Amount.from_json(m.transaction.LimitAmount).to_human_full(opts_gateways)
                         + " "
                         + UInt160.json_rewrite(m.transaction.Account, opts_gateways);
@@ -441,6 +444,7 @@ remote  =
           var taker_gets  = Amount.from_json(m.transaction.TakerGets);
           var taker_pays  = Amount.from_json(m.transaction.TakerPays);
 
+          say_type  = 'Offer';
           say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
                 + " #" + m.transaction.Sequence
                 + " offers " + taker_gets.to_human_full(opts_gateways)
@@ -484,6 +488,7 @@ remote  =
 // TODO:
 //  weex   2000 @ 0.10 BTC Bid WHP #4 Cancel
 
+          say_type  = 'Cancel';
           say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
                 + " #" + m.transaction.OfferSequence;
         }
@@ -494,7 +499,7 @@ remote  =
               (m.engine_result === 'tesSUCCESS'
                 ? ""
                 : m.engine_result + ": ")
-              + m.transaction.TransactionType + " "
+              + say_type + " "
               + say_watch;
 
           writeWatch(output);
