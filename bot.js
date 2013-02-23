@@ -197,8 +197,8 @@ var update_results = function (results) {
 
     if (_changed)
     {
-      var _output     = _currency + "=" + colorize('console', _total.to_human(), _total_diff) + ": " +_each.join(" ");
-      var _output_irc  = _currency + "=" + colorize('irc', _total.to_human(), _total_diff) + ": " +_each_irc.join(" ");
+      var _output     = "CAP " + _currency + "=" + colorize('console', _total.to_human(), _total_diff) + ": " +_each.join(" ");
+      var _output_irc  = "CAP " + _currency + "=" + colorize('irc', _total.to_human(), _total_diff) + ": " +_each_irc.join(" ");
 
       writeMarket(_output_irc, _output);
     }
