@@ -411,14 +411,23 @@ remote  =
 
         if (m.transaction.TransactionType === 'Payment')
         {
-          // XXX Show tags?
           // XXX Break payments down by parts.
+          // console.log(m);
 
+          var st  = 'number' === typeof m.transaction.SourceTag
+            ? "?st=" + m.transaction.SourceTag
+            : "";
+
+          var dt  = 'number' === typeof m.transaction.DestinationTag
+            ? "?dt=" + m.transaction.DestinationTag
+            : "";
+
+          say_type  = 'PAY';
           say_watch = Amount.from_json(m.transaction.Amount).to_human_full(opts_gateways)
                   + " "
-                  + UInt160.json_rewrite(m.transaction.Account, opts_gateways)
-                    + " > "
-                    + UInt160.json_rewrite(m.transaction.Destination, opts_gateways);
+                  + UInt160.json_rewrite(m.transaction.Account, opts_gateways) + st
+                  + " > "
+                  + UInt160.json_rewrite(m.transaction.Destination, opts_gateways) + dt;
 
           process_offers(m);
         }
@@ -426,12 +435,12 @@ remote  =
         {
           console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
-          say_type  = 'Account';
+          say_type  = 'ACT';
           say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways);
         }
         else if (m.transaction.TransactionType === 'TrustSet')
         {
-          say_type  = 'Trust';
+          say_type  = 'TRS';
           say_watch = Amount.from_json(m.transaction.LimitAmount).to_human_full(opts_gateways)
                         + " "
                         + UInt160.json_rewrite(m.transaction.Account, opts_gateways);
@@ -444,7 +453,7 @@ remote  =
           var taker_gets  = Amount.from_json(m.transaction.TakerGets);
           var taker_pays  = Amount.from_json(m.transaction.TakerPays);
 
-          say_type  = 'Offer';
+          say_type  = 'OFR';
           say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
                 + " #" + m.transaction.Sequence
                 + " offers " + taker_gets.to_human_full(opts_gateways)
@@ -488,7 +497,7 @@ remote  =
 // TODO:
 //  weex   2000 @ 0.10 BTC Bid WHP #4 Cancel
 
-          say_type  = 'Cancel';
+          say_type  = 'CAN';
           say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
                 + " #" + m.transaction.OfferSequence;
         }
