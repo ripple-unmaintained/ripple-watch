@@ -325,11 +325,11 @@ var process_offers  = function (m) {
               if (gateway)
               {
                 writeMarket(
-                    gateway
-                    + " " + taker_paid.to_human()
-                    + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
-                    + " " + taker_got.currency().to_human()
-                    + " Trade"
+                    "TRD "
+                      + gateway
+                      + " " + taker_paid.to_human()
+                      + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
+                      + " " + taker_got.currency().to_human()
                   );
               }
               else
@@ -449,8 +449,8 @@ remote  =
           if (taker_gets.is_native() || taker_pays.is_native())
           {
             var what    = taker_gets.is_native()
-                            ? 'Ask'
-                            : 'Bid';
+                            ? 'ASK'
+                            : 'BID';
             var xrp     = taker_gets.is_native()
                             ? taker_gets
                             : taker_pays;
@@ -463,12 +463,12 @@ remote  =
             if (gateway)
             {
               writeMarket(
-                  gateway
-                    + " " + xrp.to_human()
-                    + " @ " + amount.ratio_human(xrp).to_human()
-                    + " " + amount.currency().to_human()
-                    + " " + what
-                    + " " + owner + " #" + m.transaction.Sequence
+                    what
+                      + " " + gateway
+                      + " " + xrp.to_human()
+                      + " @ " + amount.ratio_human(xrp).to_human()
+                      + " " + amount.currency().to_human()
+                      + " " + owner + " #" + m.transaction.Sequence
                 );
             }
           }
