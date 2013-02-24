@@ -324,6 +324,8 @@ var process_offers  = function (m) {
 
               if (gateway)
               {
+                console.log("taker_pad: ", taker_paid.to_human());
+
                 writeMarket(
                     "TRD "
                       + gateway
@@ -440,9 +442,12 @@ remote  =
         }
         else if (m.transaction.TransactionType === 'TrustSet')
         {
+          var limit = 'LimitAmount' in m.transaction
+                        ? Amount.from_json(m.transaction.LimitAmount).to_human_full(opts_gateways) + " "
+                        : "";
+
           say_type  = 'TRS';
-          say_watch = Amount.from_json(m.transaction.LimitAmount).to_human_full(opts_gateways)
-                        + " "
+          say_watch = limit
                         + UInt160.json_rewrite(m.transaction.Account, opts_gateways);
         }
         else if (m.transaction.TransactionType === 'OfferCreate')
