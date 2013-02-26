@@ -26,15 +26,14 @@ var opts_gateways = {
 };
 
 var color_diff  = {
-  '-1' : 'dark_red',
+  '-1' : 'light_red',
    '0' : 'black',
-   '1' : 'dark_green'
+   '1' : 'light_green'
 };
 
 var colorize  = function (channel, text, delta) {
   return 'irc' === channel
-//    ? irc.colors.wrap(color_diff[delta], text)
-    ? irc.colors.wrap('light_green', text)
+    ? irc.colors.wrap(color_diff[delta], text)
     : delta
       ? delta == -1
         ? ">" + text + "<"
@@ -264,7 +263,7 @@ var actionAll = function (message) {
 var writeMarket = function (message, plain) {
   if (message)
   {
-    console.log("M: " + (plain ? plain: message));
+    console.log("M: " + (plain ? plain : message));
 
     if (self.irc_market) {
       client.say("#ripple-market", message);
@@ -272,10 +271,10 @@ var writeMarket = function (message, plain) {
   }
 }
 
-var writeWatch = function (message) {
+var writeWatch = function (message, plain) {
   if (message)
   {
-    console.log("W: " + message);
+    console.log("W: " + (plain ? plain : message));
 
     if (self.irc_watch) {
       client.say("#ripple-watch", message);
@@ -324,13 +323,14 @@ var process_offers  = function (m) {
 
               if (gateway)
               {
-                console.log("taker_pad: ", taker_paid.to_human());
+                console.log("taker_paid: %s taker_got: %s", taker_paid.to_human_full(), taker_got.to_human_full());
 
                 writeMarket(
                     "TRD "
                       + gateway
                       + " " + taker_paid.to_human()
-                      + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
+//                      + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
+                      + " @ " + taker_paid.divide(taker_got).to_human()
                       + " " + taker_got.currency().to_human()
                   );
               }
@@ -480,14 +480,15 @@ remote  =
 
             if (gateway)
             {
-              writeMarket(
+              var line =
                     what
                       + " " + gateway
                       + " " + xrp.to_human()
-                      + " @ " + amount.ratio_human(xrp).to_human()
+                      + " @ " + xrp.ratio_human(amount).to_human()
                       + " " + amount.currency().to_human()
-                      + " " + owner + " #" + m.transaction.Sequence
-                );
+                      + " " + owner + " #" + m.transaction.Sequence;
+
+              writeMarket(irc.colors.wrap('gray', line), line);
             }
           }
 
@@ -516,7 +517,12 @@ remote  =
               + say_type + " "
               + say_watch;
 
-          writeWatch(output);
+          var output_irc  =
+              m.engine_result === 'tesSUCCESS'
+                ? output
+                : irc.colors.wrap('light_red', output);
+
+          writeWatch(output_irc, output);
         }
       });
 
