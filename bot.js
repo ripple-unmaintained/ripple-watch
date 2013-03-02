@@ -285,6 +285,8 @@ var writeWatch = function (message, plain) {
 var process_offers  = function (m) {
   if (m.engine_result === 'tesSUCCESS')
   {
+    var taker = m.transaction.Account;
+
     m.meta.AffectedNodes.forEach(function (n) {
         var type;
         
@@ -305,8 +307,11 @@ var process_offers  = function (m) {
           }
           else
           {
-            var taker_got   = Amount.from_json(pf.TakerGets).subtract(Amount.from_json(ff.TakerGets));
-            var taker_paid  = Amount.from_json(pf.TakerPays).subtract(Amount.from_json(ff.TakerPays));
+            // FIXME : Handling of deleted unfunded offers.
+            var taker_got       = Amount.from_json(pf.TakerGets).subtract(Amount.from_json(ff.TakerGets));
+            var taker_paid      = Amount.from_json(pf.TakerPays).subtract(Amount.from_json(ff.TakerPays));
+            var offer_owner     = ff.Account;
+            var offer_sequence  = ff.Sequence;
 
             if (taker_got.is_native())
             {
@@ -331,14 +336,18 @@ var process_offers  = function (m) {
                       + gateway
                       + "\u000f " + taker_paid.to_human()
                       + " @ \u0002" + taker_paid.divide(taker_got).to_human()
-                      + "\u000f " + taker_got.currency().to_human();
+                      + "\u000f " + taker_got.currency().to_human()
+                      + " " + offer_owner
+                      + " #" + offer_sequence;
 
                 var trade_console =
                     "TRD "
                       + gateway
                       + " " + taker_paid.to_human()
                       + " @ " + taker_paid.divide(taker_got).to_human()
-                      + " " + taker_got.currency().to_human();
+                      + " " + taker_got.currency().to_human()
+                      + " " + offer_owner
+                      + " #" + offer_sequence;
 
                 writeMarket(trade_irc, trade_console);
               }
@@ -417,6 +426,7 @@ remote  =
       })
     .on('transaction', function (m) {
         var say_watch;
+        var say_watch_irc;
         var say_type  = m.transaction.TransactionType;
 
         console.log("hash: %s", m.transaction.hash);
@@ -426,11 +436,12 @@ remote  =
           // XXX Break payments down by parts.
           // console.log(m);
 
-          // var affected = 'meta' in m && 'AffectedNodes' in m.meta ? m.meta.AffectedNodes : [];
-          // Toward highlighting account creation:
-          // Want a sub-object of 
-          // if 'CreatedNode' in sub && 'AccountRoot' === sub.CreatedNode.LedgerEntryType
-          // && sub.CreatedNode.NewFields.Account === m.transaction.Destination
+          var created = m.meta
+            && m.meta.AffectedNodes.filter(function (node) {
+              return node.CreatedNode
+                && node.CreatedNode.LedgerEntryType === 'AccountRoot'
+                && node.CreatedNode.NewFields.Account === m.transaction.Destination;
+            }).length;
 
           var st  = 'number' === typeof m.transaction.SourceTag
             ? "?st=" + m.transaction.SourceTag
@@ -440,12 +451,22 @@ remote  =
             ? "?dt=" + m.transaction.DestinationTag
             : "";
 
-          say_type  = 'PAY';
-          say_watch = Amount.from_json(m.transaction.Amount).to_human_full(opts_gateways)
-                  + " "
-                  + UInt160.json_rewrite(m.transaction.Account, opts_gateways) + st
-                  + " > "
-                  + UInt160.json_rewrite(m.transaction.Destination, opts_gateways) + dt;
+          say_type    = 'PAY';
+          say_watch   = Amount.from_json(m.transaction.Amount).to_human_full(opts_gateways)
+                          + " "
+                          + UInt160.json_rewrite(m.transaction.Account, opts_gateways) + st
+                          + " > "
+                          + (created ? "!" : "")
+                          + UInt160.json_rewrite(m.transaction.Destination, opts_gateways) + dt
+                          + (created ? "!" : "");
+
+          say_watch_irc = Amount.from_json(m.transaction.Amount).to_human_full(opts_gateways)
+                          + " "
+                          + UInt160.json_rewrite(m.transaction.Account, opts_gateways) + st
+                          + " > "
+                          + (created ? "\u0002" : "")
+                          + UInt160.json_rewrite(m.transaction.Destination, opts_gateways) + dt
+                          + (created ? "\u000f" : "");
 
           process_offers(m);
         }
@@ -480,38 +501,54 @@ remote  =
                 + " offers " + taker_gets.to_human_full(opts_gateways)
                 + " for " + taker_pays.to_human_full(opts_gateways);
 
-          if (taker_gets.is_native() || taker_pays.is_native())
+          if (m.engine_result === 'tesSUCCESS'
+            && (taker_gets.is_native() || taker_pays.is_native()))
           {
+            // FIXME Need to show offers in proper order.
+            process_offers(m);
+
+            // Show portion off offer that stuck.
             var what    = taker_gets.is_native()
                             ? 'ASK'
                             : 'BID';
-            var xrp     = taker_gets.is_native()
-                            ? taker_gets
-                            : taker_pays;
-            var amount  = taker_gets.is_native()
-                            ? taker_pays
-                            : taker_gets;
 
-            var gateway = gateways[amount.issuer().to_json()];
+            var created_nodes  = m.meta
+                            && m.meta.AffectedNodes.filter(function (node) {
+                                return node.CreatedNode && node.CreatedNode.LedgerEntryType === 'Offer';
+                              });
 
-            if (gateway)
-            {
-              var line =
-                    what
-                      + " " + gateway
-                      + " " + xrp.to_human()
-                      + " @ " + xrp.ratio_human(amount).to_human()
-                      + " " + amount.currency().to_human()
-                      + " " + owner + " #" + m.transaction.Sequence;
+            if (created_nodes.length) {
+              var created_node  = created_nodes[0];
 
-              writeMarket(irc.colors.wrap('gray', line), line);
+//console.log("transaction: ", JSON.stringify(m.meta.AffectedNodes, undefined, 2));
+//console.log("filtered: ", JSON.stringify(m.meta.AffectedNodes, undefined, 2));
+//console.log("CREATED: ", JSON.stringify(created_node, undefined, 2));
+              var created_taker_gets = Amount.from_json(created_node.CreatedNode.NewFields.TakerGets);
+              var created_taker_pays = Amount.from_json(created_node.CreatedNode.NewFields.TakerPays);
+
+              var xrp     = taker_gets.is_native()
+                              ? created_taker_gets
+                              : created_taker_pays;
+              var amount  = taker_gets.is_native()
+                              ? created_taker_pays
+                              : created_taker_gets;
+
+              var gateway = gateways[amount.issuer().to_json()];
+
+              if (gateway)
+              {
+                var line =
+                      what
+                        + " " + gateway
+                        + " " + xrp.to_human()
+                        + " @ " + xrp.ratio_human(amount).to_human()
+                        + " " + amount.currency().to_human()
+                        + " " + owner + " #" + m.transaction.Sequence;
+
+                writeMarket(irc.colors.wrap('gray', line), line);
+              }
             }
           }
-
-//  weex   2000 @ 0.10 BTC Bid WHO #4
-//  weex   2000 @ 0.10 BTC Ask WHO #4
-//  weex 9,749.99998 @ 0.00003663003663003658 BTC Trade
-          process_offers(m);
         }
         else if (m.transaction.TransactionType === 'OfferCancel')
         {
@@ -526,19 +563,26 @@ remote  =
 
         if (say_watch)
         {
-          var output  =
+          var output_console  =
               (m.engine_result === 'tesSUCCESS'
                 ? ""
                 : m.engine_result + ": ")
               + say_type + " "
               + say_watch;
+            
+          var output_irc_base    =
+              (m.engine_result === 'tesSUCCESS'
+                ? ""
+                : m.engine_result + ": ")
+              + say_type + " "
+              + (say_watch_irc || say_watch);
 
           var output_irc  =
               m.engine_result === 'tesSUCCESS'
-                ? output
-                : irc.colors.wrap('light_red', output);
+                ? output_irc_base
+                : irc.colors.wrap('light_red', output_irc_base);
 
-          writeWatch(output_irc, output);
+          writeWatch(output_irc, output_console);
         }
       });
 
