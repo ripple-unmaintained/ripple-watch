@@ -325,14 +325,22 @@ var process_offers  = function (m) {
               {
                 console.log("taker_paid: %s taker_got: %s", taker_paid.to_human_full(), taker_got.to_human_full());
 
-                writeMarket(
+// + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
+                var trade_irc =
+                    "TRD \u0002"
+                      + gateway
+                      + "\u000f " + taker_paid.to_human()
+                      + " @ \u0002" + taker_paid.divide(taker_got).to_human()
+                      + "\u000f " + taker_got.currency().to_human();
+
+                var trade_console =
                     "TRD "
                       + gateway
                       + " " + taker_paid.to_human()
-//                      + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
                       + " @ " + taker_paid.divide(taker_got).to_human()
-                      + " " + taker_got.currency().to_human()
-                  );
+                      + " " + taker_got.currency().to_human();
+
+                writeMarket(trade_irc, trade_console);
               }
               else
               {
@@ -411,10 +419,18 @@ remote  =
         var say_watch;
         var say_type  = m.transaction.TransactionType;
 
+        console.log("hash: %s", m.transaction.hash);
+
         if (m.transaction.TransactionType === 'Payment')
         {
           // XXX Break payments down by parts.
           // console.log(m);
+
+          // var affected = 'meta' in m && 'AffectedNodes' in m.meta ? m.meta.AffectedNodes : [];
+          // Toward highlighting account creation:
+          // Want a sub-object of 
+          // if 'CreatedNode' in sub && 'AccountRoot' === sub.CreatedNode.LedgerEntryType
+          // && sub.CreatedNode.NewFields.Account === m.transaction.Destination
 
           var st  = 'number' === typeof m.transaction.SourceTag
             ? "?st=" + m.transaction.SourceTag
