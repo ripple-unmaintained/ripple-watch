@@ -328,6 +328,7 @@ var process_offers  = function (m) {
 
               if (gateway)
               {
+//console.log("Node %s", JSON.stringify(n, undefined, 2));
                 console.log("taker_paid: %s taker_got: %s", taker_paid.to_human_full(), taker_got.to_human_full());
 
 // + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
@@ -379,6 +380,19 @@ remote  =
         self.rippled  = true;
 
         console.log("*** Connected to rippled");
+
+        if (process.argv.length > 2)
+        {
+          remote
+            .request_tx(process.argv[2])
+            .on('success', function (m) {
+                // Send transaction as per normal.
+                console.log("REPLAY %s", JSON.stringify(m, undefined, 2));
+
+                remote.emit('transaction', { transaction: m });
+              })
+            .request();
+        }
       })
     .on('error', function (m) {
         console.log("*** rippled error: ", JSON.stringify(m));
