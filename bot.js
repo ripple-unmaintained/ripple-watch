@@ -297,76 +297,71 @@ var process_offers  = function (m) {
 
         var base  = type ? n[type] : undefined;
         
-        if (base && base.LedgerEntryType === 'Offer') {
-          var pf  = base.PreviousFields;
-          var ff  = base.FinalFields;
+        if (base                                  // A relevant type.
+          && base.LedgerEntryType === 'Offer'
+          && base.PreviousFields                  // Not an unfunded delete.
+          && 'TakerGets' in base.PreviousFields     // Not a microscopic offer
+          && 'TakerPays' in base.PreviousFields) {  // Not a microscopic offer
+          var pf              = base.PreviousFields;
+          var ff              = base.FinalFields;
+          var taker_got       = Amount.from_json(pf.TakerGets).subtract(Amount.from_json(ff.TakerGets));
+          var taker_paid      = Amount.from_json(pf.TakerPays).subtract(Amount.from_json(ff.TakerPays));
+          var offer_owner     = ff.Account;
+          var offer_sequence  = ff.Sequence;
 
-          if (!pf)
+          if (taker_got.is_native())
           {
-            console.log("process_offers: NO pf! %s", JSON.stringify(m, undefined, 2));
+            var tg  = taker_got;
+            var tp  = taker_paid;
+
+            taker_got   = tp;
+            taker_paid  = tg;
           }
-          else
+
+          if (taker_paid.is_native())
           {
-            // FIXME : Handling of deleted unfunded offers.
-            var taker_got       = Amount.from_json(pf.TakerGets).subtract(Amount.from_json(ff.TakerGets));
-            var taker_paid      = Amount.from_json(pf.TakerPays).subtract(Amount.from_json(ff.TakerPays));
-            var offer_owner     = ff.Account;
-            var offer_sequence  = ff.Sequence;
+            var gateway = gateways[taker_got.issuer().to_json()];
 
-            if (taker_got.is_native())
+            if (gateway)
             {
-              var tg  = taker_got;
-              var tp  = taker_paid;
-
-              taker_got   = tp;
-              taker_paid  = tg;
-            }
-
-            if (taker_paid.is_native())
-            {
-              var gateway = gateways[taker_got.issuer().to_json()];
-
-              if (gateway)
-              {
 //console.log("Node %s", JSON.stringify(n, undefined, 2));
-                console.log("taker_paid: %s taker_got: %s", taker_paid.to_human_full(), taker_got.to_human_full());
+              console.log("taker_paid: %s taker_got: %s", taker_paid.to_human_full(), taker_got.to_human_full());
 
 // + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
-                var trade_irc =
-                    "TRD \u0002"
-                      + gateway
-                      + "\u000f " + taker_paid.to_human()
-                      + " @ \u0002" + taker_paid.divide(taker_got).to_human()
-                      + "\u000f " + taker_got.currency().to_human()
-                      + " " + offer_owner
-                      + " #" + offer_sequence;
+              var trade_irc =
+                  "TRD \u0002"
+                    + gateway
+                    + "\u000f " + taker_paid.to_human()
+                    + " @ \u0002" + taker_paid.divide(taker_got).to_human()
+                    + "\u000f " + taker_got.currency().to_human()
+                    + " " + offer_owner
+                    + " #" + offer_sequence;
 
-                var trade_console =
-                    "TRD "
-                      + gateway
-                      + " " + taker_paid.to_human()
-                      + " @ " + taker_paid.divide(taker_got).to_human()
-                      + " " + taker_got.currency().to_human()
-                      + " " + offer_owner
-                      + " #" + offer_sequence;
+              var trade_console =
+                  "TRD "
+                    + gateway
+                    + " " + taker_paid.to_human()
+                    + " @ " + taker_paid.divide(taker_got).to_human()
+                    + " " + taker_got.currency().to_human()
+                    + " " + offer_owner
+                    + " #" + offer_sequence;
 
-                writeMarket(trade_irc, trade_console);
-              }
-              else
-              {
-                // Ignore unrenowned issuer.
-              }
+              writeMarket(trade_irc, trade_console);
             }
             else
             {
-              // Ignore IOU for IOU.
+              // Ignore unrenowned issuer.
+            }
+          }
+          else
+          {
+            // Ignore IOU for IOU.
 console.log("*: ignore");
 //          writeMarket(
 //            taker_paid.to_human_full()
 //            + " for "
 //            + taker_got.to_human_full()
 //            );
-            }
           }
         }
       });
@@ -438,7 +433,7 @@ remote  =
 
         capital_update(m.ledger_hash);
       })
-    .on('transaction', function (m) {
+    .on('transaction_all', function (m) {
         var say_watch;
         var say_watch_irc;
         var say_type  = m.transaction.TransactionType;
