@@ -16,7 +16,7 @@ var remote_config = require("./config").remote_config;
 
 var self  = this;
 
-self.totalCoins   = undefined;
+self.total_coins  = undefined;
 self.load_factor  = undefined;
 
 var remote;
@@ -421,12 +421,17 @@ remote  =
           .ledger_index(m.ledger_index)
           .on('error', function (m) {})
           .on('success', function (lh) {
-              if (self.totalCoins !== lh.ledger.totalCoins) {
-                self.totalCoins = lh.ledger.totalCoins;
+
+              // Handle deprecated format.
+              if ('totalCoins' in lh.ledger)
+                lh.ledger.total_coins = lh.ledger.totalCoins;
+
+              if (self.total_coins !== lh.ledger.total_coins) {
+                self.total_coins = lh.ledger.total_coins;
 
                 // console.log("ledger_header: ", JSON.stringify(lh));
 
-                actionWatch("on ledger #" + m.ledger_index + ". Total: " + Amount.from_json(self.totalCoins).to_human() + "/XRP");
+                actionWatch("on ledger #" + m.ledger_index + ". Total: " + Amount.from_json(self.total_coins).to_human() + "/XRP");
               }
             })
           .request()
