@@ -505,11 +505,13 @@ remote  =
         {
           // console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
-          var owner        = UInt160.json_rewrite(m.transaction.Account, opts_gateways);
+          var owner       = UInt160.json_rewrite(m.transaction.Account, opts_gateways);
           var taker_gets  = Amount.from_json(m.transaction.TakerGets);
           var taker_pays  = Amount.from_json(m.transaction.TakerPays);
+          vat b_fok       = !!(m.transaction.Flags & Transaction.flags.OfferCreate.FillOrKill);
+          vat b_ioc       = !!(m.transaction.Flags & Transaction.flags.OfferCreate.ImmediateOrCancel);
 
-          say_type  = 'OFR';
+          say_type  = b_fok ? 'FOK' : b_ioc ? 'IOC' : 'OFR';
           say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
                 + " #" + m.transaction.Sequence
                 + " offers " + taker_gets.to_human_full(opts_gateways)
