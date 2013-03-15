@@ -506,11 +506,20 @@ remote  =
         {
           // console.log("transaction: ", JSON.stringify(m, undefined, 2));
 
+          // XXX Kludge to make available flag values.
+          var flags = {
+                        'OfferCreate' : {
+                          'Passive'                 : 0x00010000,
+                          'ImmediateOrCancel'       : 0x00020000,
+                          'FillOrKill'              : 0x00040000,
+                        }
+                      };
+
           var owner       = UInt160.json_rewrite(m.transaction.Account, opts_gateways);
           var taker_gets  = Amount.from_json(m.transaction.TakerGets);
           var taker_pays  = Amount.from_json(m.transaction.TakerPays);
-          var b_fok       = !!(m.transaction.Flags & Transaction.flags.OfferCreate.FillOrKill);
-          var b_ioc       = !!(m.transaction.Flags & Transaction.flags.OfferCreate.ImmediateOrCancel);
+          var b_fok       = !!(m.transaction.Flags & flags.OfferCreate.FillOrKill);
+          var b_ioc       = !!(m.transaction.Flags & flags.OfferCreate.ImmediateOrCancel);
 
           say_type  = b_fok ? 'FOK' : b_ioc ? 'IOC' : 'OFR';
           say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
