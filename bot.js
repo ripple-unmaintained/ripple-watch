@@ -466,8 +466,20 @@ remote  =
             ? "?dt=" + m.transaction.DestinationTag
             : "";
 
+          var b_gateway_src = !!gateway_addresses[UInt160.json_rewrite(m.transaction.Account)];
+          var b_gateway_dst = !!gateway_addresses[UInt160.json_rewrite(m.transaction.Destination)];
+          var pay_diff      = b_gateway_src
+                                ? +1
+                                : b_gateway_dst
+                                  ? -1
+                                  : 0;
+
+          var say_amount    = Amount.from_json(m.transaction.Amount).to_human_full(opts_gateways);
+
           say_type    = 'PAY';
-          say_watch   = Amount.from_json(m.transaction.Amount).to_human_full(opts_gateways)
+          say_watch   = (pay_diff ? "!" : "")
+                          + colorize('console', say_amount, pay_diff)
+                          + (pay_diff ? "!" : "")
                           + " "
                           + UInt160.json_rewrite(m.transaction.Account, opts_gateways) + st
                           + " > "
@@ -475,7 +487,9 @@ remote  =
                           + UInt160.json_rewrite(m.transaction.Destination, opts_gateways) + dt
                           + (created ? "!" : "");
 
-          say_watch_irc = Amount.from_json(m.transaction.Amount).to_human_full(opts_gateways)
+          say_watch_irc = (pay_diff ? "\u0002" : "")
+                          + colorize('irc', say_amount, pay_diff)
+                          + (pay_diff ? "\u000f" : "")
                           + " "
                           + UInt160.json_rewrite(m.transaction.Account, opts_gateways) + st
                           + " > "
