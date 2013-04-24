@@ -15,12 +15,9 @@ var hotwallets = {
 };
 
 var remote_config = {
-  'trusted' : true,
-  'websocket_ip' : "s1.ripple.com",
-  'websocket_port' : 54321,
-  'websocket_ssl' : true, // put false for development
-  'local_sequence' : true,
-  'local_fee' : true,
+    'websocket_ip' : "s1.ripple.com",
+    'websocket_port' : 51233,
+    'websocket_ssl' : true
 };
 
 exports.irc_config	= irc_config;
