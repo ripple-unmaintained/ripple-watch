@@ -1,5 +1,5 @@
 Set up instructions:
- npm install async extend node-irc ripple-lib
+ npm install async extend irc ripple-lib
  cp config-example.js config.js
 
 Customize config.js
