@@ -305,13 +305,16 @@ var process_offers  = function (m) {
           && 'TakerPays' in base.PreviousFields) {  // Not a microscopic offer
           var pf              = base.PreviousFields;
           var ff              = base.FinalFields;
-          var taker_got       = Amount.from_json(pf.TakerGets).subtract(Amount.from_json(ff.TakerGets));
-          var taker_paid      = Amount.from_json(pf.TakerPays).subtract(Amount.from_json(ff.TakerPays));
           var offer_owner     = ff.Account;
           var offer_sequence  = ff.Sequence;
+          var taker_got       = Amount.from_json(pf.TakerGets).subtract(Amount.from_json(ff.TakerGets));
+          var taker_paid      = Amount.from_json(pf.TakerPays).subtract(Amount.from_json(ff.TakerPays));
+          var book_price      = Amount.from_quality(ff.BookDirectory, "1", "1");
 
           if (taker_got.is_native())
           {
+            book_price  = book_price.multiply(Amount.from_json("1000000")); // Adjust for drops: The result would be a million times too small.
+
             var tg  = taker_got;
             var tp  = taker_paid;
 
@@ -321,6 +324,8 @@ var process_offers  = function (m) {
 
           if (taker_paid.is_native())
           {
+            book_price  = book_price.divide(Amount.from_json("1000000")); // Adjust for drops: The result would be a million times too large.
+
             var gateway = gateways[taker_got.issuer().to_json()];
 
             if (gateway)
@@ -333,7 +338,7 @@ var process_offers  = function (m) {
                   "TRD \u0002"
                     + gateway
                     + "\u000f " + taker_paid.to_human()
-                    + " @ \u0002" + taker_paid.divide(taker_got).to_human()
+                    + " @ \u0002" + book_price.to_human() // taker_paid.divide(taker_got)
                     + "\u000f " + taker_got.currency().to_human()
                     + " " + offer_owner
                     + " #" + offer_sequence;
@@ -342,7 +347,7 @@ var process_offers  = function (m) {
                   "TRD "
                     + gateway
                     + " " + taker_paid.to_human()
-                    + " @ " + taker_paid.divide(taker_got).to_human()
+                    + " @ " + book_price.to_human()       // taker_paid.divide(taker_got)
                     + " " + taker_got.currency().to_human()
                     + " " + offer_owner
                     + " #" + offer_sequence;
@@ -358,11 +363,6 @@ var process_offers  = function (m) {
           {
             // Ignore IOU for IOU.
 console.log("*: ignore");
-//          writeMarket(
-//            taker_paid.to_human_full()
-//            + " for "
-//            + taker_got.to_human_full()
-//            );
           }
         }
       });
