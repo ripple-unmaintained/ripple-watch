@@ -286,7 +286,9 @@ var writeWatch = function (message, plain) {
 var process_offers  = function (m) {
   if (m.engine_result === 'tesSUCCESS')
   {
-    var taker = m.transaction.Account;
+    var taker   = m.transaction.Account;
+    var trades  = [];
+    var buying  = false;
 
     m.meta.AffectedNodes.forEach(function (n) {
         var type;
@@ -313,6 +315,7 @@ var process_offers  = function (m) {
 
           if (taker_got.is_native())
           {
+            buying      = true;
             book_price  = book_price.multiply(Amount.from_json("1000000")); // Adjust for drops: The result would be a million times too small.
 
             var tg  = taker_got;
@@ -321,38 +324,31 @@ var process_offers  = function (m) {
             taker_got   = tp;
             taker_paid  = tg;
           }
+          else
+          {
+            book_price  = book_price.divide(Amount.from_json("1000000")); // Adjust for drops: The result would be a million times too large.
+          }
 
           if (taker_paid.is_native())
           {
-            book_price  = book_price.divide(Amount.from_json("1000000")); // Adjust for drops: The result would be a million times too large.
 
             var gateway = gateways[taker_got.issuer().to_json()];
 
             if (gateway)
             {
 //console.log("Node %s", JSON.stringify(n, undefined, 2));
-              console.log("taker_paid: %s taker_got: %s", taker_paid.to_human_full(), taker_got.to_human_full());
-
-// + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
-              var trade_irc =
-                  "TRD \u0002"
-                    + gateway
-                    + "\u000f " + taker_paid.to_human()
-                    + " @ \u0002" + book_price.to_human() // taker_paid.divide(taker_got)
-                    + "\u000f " + taker_got.currency().to_human()
-                    + " " + offer_owner
-                    + " #" + offer_sequence;
-
-              var trade_console =
-                  "TRD "
-                    + gateway
-                    + " " + taker_paid.to_human()
-                    + " @ " + book_price.to_human()       // taker_paid.divide(taker_got)
-                    + " " + taker_got.currency().to_human()
-                    + " " + offer_owner
-                    + " #" + offer_sequence;
-
-              writeMarket(trade_irc, trade_console);
+              trades.push({
+                  gateway:        gateway,
+                  taker_paid:     taker_paid,
+                  book_price:     book_price,
+                  taker_got:      taker_got,
+                  offer_owner:    offer_owner,
+                  offer_sequence: offer_sequence,
+                  sort:           Number(taker_paid.to_human({
+                                      precision: 8,
+                                      group_sep: false,
+                                    })),
+                });
             }
             else
             {
@@ -366,6 +362,36 @@ console.log("*: ignore");
           }
         }
       });
+
+    trades.sort(buying
+        ? function (a,b) { return b.sort-a.sort; }  // Normal order: lowest first
+        : function (a,b) { return a.sort-b.sort; }  // Reverse.
+      );
+
+    trades.forEach(function (t) {
+      console.log("taker_paid: %s taker_got: %s", t.taker_paid.to_human_full(), t.taker_got.to_human_full());
+
+// + " @ " + taker_got.multiply(Amount.from_json("1000000")).divide(taker_paid).to_human()
+      var trade_irc =
+          "TRD \u0002"
+            + t.gateway
+            + "\u000f " + t.taker_paid.to_human()
+            + " @ \u0002" + t.book_price.to_human() // taker_paid.divide(taker_got)
+            + "\u000f " + t.taker_got.currency().to_human()
+            + " " + t.offer_owner
+            + " #" + t.offer_sequence;
+
+      var trade_console =
+          "TRD "
+            + t.gateway
+            + " " + t.taker_paid.to_human()
+            + " @ " + t.book_price.to_human()       // taker_paid.divide(taker_got)
+            + " " + t.taker_got.currency().to_human()
+            + " " + t.offer_owner
+            + " #" + t.offer_sequence;
+
+      writeMarket(trade_irc, trade_console);
+    });
   }
 }
 
