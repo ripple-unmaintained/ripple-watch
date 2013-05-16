@@ -284,7 +284,7 @@ var writeWatch = function (message, plain) {
 }
 
 var process_offers  = function (m) {
-  if (m.engine_result === 'tesSUCCESS')
+  if (m.meta.TransactionResult === 'tesSUCCESS')
   {
     var taker   = m.transaction.Account;
     var trades  = [];
@@ -317,6 +317,7 @@ var process_offers  = function (m) {
           {
             buying      = true;
             book_price  = book_price.multiply(Amount.from_json("1000000")); // Adjust for drops: The result would be a million times too small.
+            book_price  = Amount.from_json("1.0/1/1").divide(book_price);
 
             var tg  = taker_got;
             var tp  = taker_paid;
@@ -336,8 +337,7 @@ var process_offers  = function (m) {
 
             if (gateway)
             {
-//console.log("Node %s", JSON.stringify(n, undefined, 2));
-              trades.push({
+              var n = {
                   gateway:        gateway,
                   taker_paid:     taker_paid,
                   book_price:     book_price,
@@ -348,7 +348,8 @@ var process_offers  = function (m) {
                                       precision: 8,
                                       group_sep: false,
                                     })),
-                });
+                };
+              trades.push(n);
             }
             else
             {
@@ -395,6 +396,184 @@ console.log("*: ignore");
   }
 }
 
+var process_tx  = function (m) {
+  var say_watch;
+  var say_watch_irc;
+  var say_type  = m.transaction.TransactionType;
+
+  console.log("hash: %s", m.transaction.hash);
+  // console.log("m: %s", JSON.stringify(m, undefined, 2));
+
+  if (m.transaction.TransactionType === 'Payment')
+  {
+    // XXX Break payments down by parts.
+    // console.log(m);
+
+    var created = m.meta
+      && m.meta.AffectedNodes.filter(function (node) {
+        return node.CreatedNode
+          && node.CreatedNode.LedgerEntryType === 'AccountRoot'
+          && node.CreatedNode.NewFields.Account === m.transaction.Destination;
+      }).length;
+
+    var st  = 'number' === typeof m.transaction.SourceTag
+      ? "?st=" + m.transaction.SourceTag
+      : "";
+
+    var dt  = 'number' === typeof m.transaction.DestinationTag
+      ? "?dt=" + m.transaction.DestinationTag
+      : "";
+
+    var b_gateway_src = !!gateway_addresses[UInt160.json_rewrite(m.transaction.Account)];
+    var b_gateway_dst = !!gateway_addresses[UInt160.json_rewrite(m.transaction.Destination)];
+    var pay_diff      = b_gateway_src
+                          ? +1
+                          : b_gateway_dst
+                            ? -1
+                            : 0;
+
+    var say_amount    = Amount.from_json(m.transaction.Amount).to_human_full(opts_gateways);
+
+    say_type    = 'PAY';
+    say_watch   = (pay_diff ? "!" : "")
+                    + colorize('console', say_amount, pay_diff)
+                    + (pay_diff ? "!" : "")
+                    + " "
+                    + UInt160.json_rewrite(m.transaction.Account, opts_gateways) + st
+                    + " > "
+                    + (created ? "!" : "")
+                    + UInt160.json_rewrite(m.transaction.Destination, opts_gateways) + dt
+                    + (created ? "!" : "");
+
+    say_watch_irc = (pay_diff ? "\u0002" : "")
+                    + colorize('irc', say_amount, pay_diff)
+                    + (pay_diff ? "\u000f" : "")
+                    + " "
+                    + UInt160.json_rewrite(m.transaction.Account, opts_gateways) + st
+                    + " > "
+                    + (created ? "\u0002" : "")
+                    + UInt160.json_rewrite(m.transaction.Destination, opts_gateways) + dt
+                    + (created ? "\u000f" : "");
+
+    process_offers(m);
+  }
+  else if (m.transaction.TransactionType === 'AccountSet')
+  {
+    console.log("transaction: ", JSON.stringify(m, undefined, 2));
+
+    say_type  = 'ACT';
+    say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways);
+  }
+  else if (m.transaction.TransactionType === 'TrustSet')
+  {
+    var limit = 'LimitAmount' in m.transaction
+                  ? Amount.from_json(m.transaction.LimitAmount).to_human_full(opts_gateways) + " "
+                  : "";
+
+    say_type  = 'TRS';
+    say_watch = limit
+                  + UInt160.json_rewrite(m.transaction.Account, opts_gateways);
+  }
+  else if (m.transaction.TransactionType === 'OfferCreate')
+  {
+    // console.log("OfferCreate: ", JSON.stringify(m, undefined, 2));
+
+    var owner       = UInt160.json_rewrite(m.transaction.Account, opts_gateways);
+    var taker_gets  = Amount.from_json(m.transaction.TakerGets);
+    var taker_pays  = Amount.from_json(m.transaction.TakerPays);
+    var b_fok       = !!(m.transaction.Flags & Transaction.flags.OfferCreate.FillOrKill);
+    var b_ioc       = !!(m.transaction.Flags & Transaction.flags.OfferCreate.ImmediateOrCancel);
+
+    say_type  = b_fok ? 'FOK' : b_ioc ? 'IOC' : 'OFR';
+    say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
+          + " #" + m.transaction.Sequence
+          + " offers " + taker_gets.to_human_full(opts_gateways)
+          + " for " + taker_pays.to_human_full(opts_gateways);
+
+    if (m.meta.TransactionResult === 'tesSUCCESS'
+      && (taker_gets.is_native() || taker_pays.is_native()))
+    {
+      process_offers(m);
+
+      // Show portion off offer that stuck.
+      var what    = taker_gets.is_native()
+                      ? 'ASK'
+                      : 'BID';
+
+      var created_nodes  = m.meta
+                      && m.meta.AffectedNodes.filter(function (node) {
+                          return node.CreatedNode && node.CreatedNode.LedgerEntryType === 'Offer';
+                        });
+
+      if (created_nodes.length) {
+        var created_node  = created_nodes[0];
+
+//console.log("transaction: ", JSON.stringify(m.meta.AffectedNodes, undefined, 2));
+//console.log("filtered: ", JSON.stringify(m.meta.AffectedNodes, undefined, 2));
+//console.log("CREATED: ", JSON.stringify(created_node, undefined, 2));
+        var created_taker_gets = Amount.from_json(created_node.CreatedNode.NewFields.TakerGets);
+        var created_taker_pays = Amount.from_json(created_node.CreatedNode.NewFields.TakerPays);
+
+        var xrp     = taker_gets.is_native()
+                        ? created_taker_gets
+                        : created_taker_pays;
+        var amount  = taker_gets.is_native()
+                        ? created_taker_pays
+                        : created_taker_gets;
+
+        var gateway = gateways[amount.issuer().to_json()];
+
+        if (gateway)
+        {
+          var line =
+                what
+                  + " " + gateway
+                  + " " + xrp.to_human()
+                  + " @ " + xrp.ratio_human(amount).to_human()
+                  + " " + amount.currency().to_human()
+                  + " " + owner + " #" + m.transaction.Sequence;
+
+          writeMarket(irc.colors.wrap('gray', line), line);
+        }
+      }
+    }
+  }
+  else if (m.transaction.TransactionType === 'OfferCancel')
+  {
+    // console.log("transaction: ", JSON.stringify(m, undefined, 2));
+// TODO:
+//  weex   2000 @ 0.10 BTC Bid WHP #4 Cancel
+
+    say_type  = 'CAN';
+    say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
+          + " #" + m.transaction.OfferSequence;
+  }
+
+  if (say_watch)
+  {
+    var output_console  =
+        (m.engine_result === 'tesSUCCESS'
+          ? ""
+          : m.engine_result + ": ")
+        + say_type + " "
+        + say_watch;
+      
+    var output_irc_base    =
+        (m.engine_result === 'tesSUCCESS'
+          ? ""
+          : m.engine_result + ": ")
+        + say_type + " "
+        + (say_watch_irc || say_watch);
+
+    var output_irc  =
+        m.engine_result === 'tesSUCCESS'
+          ? output_irc_base
+          : irc.colors.wrap('light_red', output_irc_base);
+
+    writeWatch(output_irc, output_console);
+  }
+};
+ 
 remote  =
   Remote
     .from_config(remote_config)
@@ -411,7 +590,12 @@ remote  =
                 // Send transaction as per normal.
                 console.log("REPLAY %s", JSON.stringify(m, undefined, 2));
 
-                remote.emit('transaction', { transaction: m });
+                remote.emit('transaction_all', {
+                  transaction: m,
+                  meta: m.meta,
+                });
+
+                process.exit();
               })
             .request();
         }
@@ -465,183 +649,7 @@ remote  =
 
         capital_update(m.ledger_hash);
       })
-    .on('transaction_all', function (m) {
-        var say_watch;
-        var say_watch_irc;
-        var say_type  = m.transaction.TransactionType;
-
-        console.log("hash: %s", m.transaction.hash);
-
-        if (m.transaction.TransactionType === 'Payment')
-        {
-          // XXX Break payments down by parts.
-          // console.log(m);
-
-          var created = m.meta
-            && m.meta.AffectedNodes.filter(function (node) {
-              return node.CreatedNode
-                && node.CreatedNode.LedgerEntryType === 'AccountRoot'
-                && node.CreatedNode.NewFields.Account === m.transaction.Destination;
-            }).length;
-
-          var st  = 'number' === typeof m.transaction.SourceTag
-            ? "?st=" + m.transaction.SourceTag
-            : "";
-
-          var dt  = 'number' === typeof m.transaction.DestinationTag
-            ? "?dt=" + m.transaction.DestinationTag
-            : "";
-
-          var b_gateway_src = !!gateway_addresses[UInt160.json_rewrite(m.transaction.Account)];
-          var b_gateway_dst = !!gateway_addresses[UInt160.json_rewrite(m.transaction.Destination)];
-          var pay_diff      = b_gateway_src
-                                ? +1
-                                : b_gateway_dst
-                                  ? -1
-                                  : 0;
-
-          var say_amount    = Amount.from_json(m.transaction.Amount).to_human_full(opts_gateways);
-
-          say_type    = 'PAY';
-          say_watch   = (pay_diff ? "!" : "")
-                          + colorize('console', say_amount, pay_diff)
-                          + (pay_diff ? "!" : "")
-                          + " "
-                          + UInt160.json_rewrite(m.transaction.Account, opts_gateways) + st
-                          + " > "
-                          + (created ? "!" : "")
-                          + UInt160.json_rewrite(m.transaction.Destination, opts_gateways) + dt
-                          + (created ? "!" : "");
-
-          say_watch_irc = (pay_diff ? "\u0002" : "")
-                          + colorize('irc', say_amount, pay_diff)
-                          + (pay_diff ? "\u000f" : "")
-                          + " "
-                          + UInt160.json_rewrite(m.transaction.Account, opts_gateways) + st
-                          + " > "
-                          + (created ? "\u0002" : "")
-                          + UInt160.json_rewrite(m.transaction.Destination, opts_gateways) + dt
-                          + (created ? "\u000f" : "");
-
-          process_offers(m);
-        }
-        else if (m.transaction.TransactionType === 'AccountSet')
-        {
-          console.log("transaction: ", JSON.stringify(m, undefined, 2));
-
-          say_type  = 'ACT';
-          say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways);
-        }
-        else if (m.transaction.TransactionType === 'TrustSet')
-        {
-          var limit = 'LimitAmount' in m.transaction
-                        ? Amount.from_json(m.transaction.LimitAmount).to_human_full(opts_gateways) + " "
-                        : "";
-
-          say_type  = 'TRS';
-          say_watch = limit
-                        + UInt160.json_rewrite(m.transaction.Account, opts_gateways);
-        }
-        else if (m.transaction.TransactionType === 'OfferCreate')
-        {
-          // console.log("transaction: ", JSON.stringify(m, undefined, 2));
-
-          var owner       = UInt160.json_rewrite(m.transaction.Account, opts_gateways);
-          var taker_gets  = Amount.from_json(m.transaction.TakerGets);
-          var taker_pays  = Amount.from_json(m.transaction.TakerPays);
-          var b_fok       = !!(m.transaction.Flags & Transaction.flags.OfferCreate.FillOrKill);
-          var b_ioc       = !!(m.transaction.Flags & Transaction.flags.OfferCreate.ImmediateOrCancel);
-
-          say_type  = b_fok ? 'FOK' : b_ioc ? 'IOC' : 'OFR';
-          say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
-                + " #" + m.transaction.Sequence
-                + " offers " + taker_gets.to_human_full(opts_gateways)
-                + " for " + taker_pays.to_human_full(opts_gateways);
-
-          if (m.engine_result === 'tesSUCCESS'
-            && (taker_gets.is_native() || taker_pays.is_native()))
-          {
-            // FIXME Need to show offers in proper order.
-            process_offers(m);
-
-            // Show portion off offer that stuck.
-            var what    = taker_gets.is_native()
-                            ? 'ASK'
-                            : 'BID';
-
-            var created_nodes  = m.meta
-                            && m.meta.AffectedNodes.filter(function (node) {
-                                return node.CreatedNode && node.CreatedNode.LedgerEntryType === 'Offer';
-                              });
-
-            if (created_nodes.length) {
-              var created_node  = created_nodes[0];
-
-//console.log("transaction: ", JSON.stringify(m.meta.AffectedNodes, undefined, 2));
-//console.log("filtered: ", JSON.stringify(m.meta.AffectedNodes, undefined, 2));
-//console.log("CREATED: ", JSON.stringify(created_node, undefined, 2));
-              var created_taker_gets = Amount.from_json(created_node.CreatedNode.NewFields.TakerGets);
-              var created_taker_pays = Amount.from_json(created_node.CreatedNode.NewFields.TakerPays);
-
-              var xrp     = taker_gets.is_native()
-                              ? created_taker_gets
-                              : created_taker_pays;
-              var amount  = taker_gets.is_native()
-                              ? created_taker_pays
-                              : created_taker_gets;
-
-              var gateway = gateways[amount.issuer().to_json()];
-
-              if (gateway)
-              {
-                var line =
-                      what
-                        + " " + gateway
-                        + " " + xrp.to_human()
-                        + " @ " + xrp.ratio_human(amount).to_human()
-                        + " " + amount.currency().to_human()
-                        + " " + owner + " #" + m.transaction.Sequence;
-
-                writeMarket(irc.colors.wrap('gray', line), line);
-              }
-            }
-          }
-        }
-        else if (m.transaction.TransactionType === 'OfferCancel')
-        {
-          // console.log("transaction: ", JSON.stringify(m, undefined, 2));
-// TODO:
-//  weex   2000 @ 0.10 BTC Bid WHP #4 Cancel
-
-          say_type  = 'CAN';
-          say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
-                + " #" + m.transaction.OfferSequence;
-        }
-
-        if (say_watch)
-        {
-          var output_console  =
-              (m.engine_result === 'tesSUCCESS'
-                ? ""
-                : m.engine_result + ": ")
-              + say_type + " "
-              + say_watch;
-            
-          var output_irc_base    =
-              (m.engine_result === 'tesSUCCESS'
-                ? ""
-                : m.engine_result + ": ")
-              + say_type + " "
-              + (say_watch_irc || say_watch);
-
-          var output_irc  =
-              m.engine_result === 'tesSUCCESS'
-                ? output_irc_base
-                : irc.colors.wrap('light_red', output_irc_base);
-
-          writeWatch(output_irc, output_console);
-        }
-      });
+    .on('transaction_all', process_tx);
 
 var client = new irc.Client('irc.freenode.net', 'ripplebot', {
     userName: "ripplebot",
