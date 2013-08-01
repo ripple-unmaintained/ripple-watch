@@ -424,13 +424,13 @@ remote  =
           .on('success', function (lh) {
 
               // Handle deprecated format.
-              if ('totalCoins' in lh.ledger)
+              if (!('total_coins' in lh.ledger) && 'totalCoins' in lh.ledger)
                 lh.ledger.total_coins = lh.ledger.totalCoins;
 
               if (self.total_coins !== lh.ledger.total_coins) {
                 self.total_coins = lh.ledger.total_coins;
 
-                // console.log("ledger_header: ", JSON.stringify(lh));
+                // console.log("ledger_header: ", JSON.stringify(lh, undefined, 2));
 
                 actionWatch("on ledger #" + m.ledger_index + ". Total: " + Amount.from_json(self.total_coins).to_human() + "/XRP");
               }
@@ -443,8 +443,9 @@ remote  =
         var say_watch;
         var say_watch_irc;
         var say_type  = m.transaction.TransactionType;
+        var fee       = Number(m.transaction.Fee);
 
-        console.log("hash: %s", m.transaction.hash);
+        // console.log("hash: %s", m.transaction.hash);
 
         if (m.transaction.TransactionType === 'Payment')
         {
@@ -594,6 +595,16 @@ remote  =
 
         if (say_watch)
         {
+          if (fee != 10)
+          {
+            say_watch += " [" + fee + "]";
+
+            if (say_watch_irc)
+            {
+              say_watch_irc += " [" + fee + "]";
+            }
+          }
+
           var output_console  =
               (m.engine_result === 'tesSUCCESS'
                 ? ""
