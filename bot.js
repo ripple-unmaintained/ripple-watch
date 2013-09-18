@@ -344,7 +344,7 @@ var process_offers  = function (m) {
                   taker_got:      taker_got,
                   offer_owner:    offer_owner,
                   offer_sequence: offer_sequence,
-                  sort:           Number(taker_paid.to_human({
+                  sort:           Number(book_price.to_human({
                                       precision: 8,
                                       group_sep: false,
                                     })),
