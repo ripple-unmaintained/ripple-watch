@@ -484,11 +484,11 @@ var process_tx  = function (m) {
     var b_fok       = !!(m.transaction.Flags & Transaction.flags.OfferCreate.FillOrKill);
     var b_ioc       = !!(m.transaction.Flags & Transaction.flags.OfferCreate.ImmediateOrCancel);
 
-    say_type  = b_fok ? 'FOK' : b_ioc ? 'IOC' : 'OFR';
-    say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
-          + " #" + m.transaction.Sequence
-          + " offers " + taker_gets.to_human_full(opts_gateways)
-          + " for " + taker_pays.to_human_full(opts_gateways);
+//    say_type  = b_fok ? 'FOK' : b_ioc ? 'IOC' : 'OFR';
+//    say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
+//          + " #" + m.transaction.Sequence
+//          + " offers " + taker_gets.to_human_full(opts_gateways)
+//          + " for " + taker_pays.to_human_full(opts_gateways);
 
     if (m.meta.TransactionResult === 'tesSUCCESS'
       && (taker_gets.is_native() || taker_pays.is_native()))
@@ -544,9 +544,9 @@ var process_tx  = function (m) {
 // TODO:
 //  weex   2000 @ 0.10 BTC Bid WHP #4 Cancel
 
-    say_type  = 'CAN';
-    say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
-          + " #" + m.transaction.OfferSequence;
+//    say_type  = 'CAN';
+//    say_watch = UInt160.json_rewrite(m.transaction.Account, opts_gateways)
+//          + " #" + m.transaction.OfferSequence;
   }
 
   if (say_watch)
