@@ -578,7 +578,9 @@ var process_tx  = function (m) {
     var output_irc  =
         m.engine_result === 'tesSUCCESS'
           ? output_irc_base
-          : irc.colors.wrap('light_red', output_irc_base);
+          : m.engine_result.match('tecPATH_DRY|tecPATH_PARTIAL') === null
+            ? irc.colors.wrap('light_red', m.engine_result)
+            : undefined;
 
     writeWatch(output_irc, output_console);
   }
