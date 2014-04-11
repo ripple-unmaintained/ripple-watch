@@ -26,5 +26,6 @@ var remote_config = {
 exports.irc_config	= irc_config;
 exports.remote_config	= remote_config;
 exports.gateways	= gateways;
+exports.hotwallets = hotwallets;
 
 // vim:sw=2:sts=2:ts=8:et
